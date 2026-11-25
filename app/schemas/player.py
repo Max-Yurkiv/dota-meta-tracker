@@ -7,3 +7,4 @@ class PlayerProfileResponse(BaseModel):
     avatar: str | None
     rank_tier: int | None
     rank_name: str
+    from_cache: bool = False

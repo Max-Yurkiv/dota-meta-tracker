@@ -1,6 +1,10 @@
+import json
 import httpx
 from fastapi import HTTPException
+from redis.exceptions import RedisError
+
 from app.core.config import settings
+from app.core.redis import redis_client
 from app.schemas.player import PlayerProfileResponse
 
 RANK_NAMES = {
@@ -33,8 +37,18 @@ class OpenDotaService:
 
     async def get_player_profile(self, steam_id: int) -> PlayerProfileResponse:
         account_id = self.normalize_account_id(steam_id)
-        url = f"{settings.OPENDOTA_BASE_URL}/players/{account_id}"
+        cache_key = f"player:profile:{account_id}"
 
+        try:
+            cached_data = await redis_client.get(cache_key)
+            if cached_data:
+                player_dict = json.loads(cached_data)
+                player_dict["from_cache"] = True
+                return PlayerProfileResponse(**player_dict)
+        except RedisError:
+            pass  
+
+        url = f"{settings.OPENDOTA_BASE_URL}/players/{account_id}"
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
 
@@ -50,13 +64,25 @@ class OpenDotaService:
                 detail="Профіль не знайдено або у гравця закрита історія матчів",
             )
 
-        return PlayerProfileResponse(
+        player = PlayerProfileResponse(
             account_id=account_id,
             nickname=profile.get("personaname"),
             avatar=profile.get("avatarfull"),
             rank_tier=data.get("rank_tier"),
             rank_name=self.decode_rank(data.get("rank_tier")),
+            from_cache=False,
         )
+
+        try:
+            await redis_client.setex(
+                cache_key,
+                settings.PLAYER_CACHE_TTL,
+                player.model_dump_json(),
+            )
+        except RedisError:
+            pass
+
+        return player
 
 
 opendota_service = OpenDotaService()
