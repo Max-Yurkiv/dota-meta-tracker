@@ -39,6 +39,7 @@ class OpenDotaService:
         account_id = self.normalize_account_id(steam_id)
         cache_key = f"player:profile:{account_id}"
 
+        # 1. Пробуємо дістати профіль із Redis
         try:
             cached_data = await redis_client.get(cache_key)
             if cached_data:
@@ -46,8 +47,9 @@ class OpenDotaService:
                 player_dict["from_cache"] = True
                 return PlayerProfileResponse(**player_dict)
         except RedisError:
-            pass  
+            pass
 
+        # 2. Запит в OpenDota
         url = f"{settings.OPENDOTA_BASE_URL}/players/{account_id}"
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
@@ -73,6 +75,7 @@ class OpenDotaService:
             from_cache=False,
         )
 
+        # 3. Зберігаємо результат у Redis
         try:
             await redis_client.setex(
                 cache_key,

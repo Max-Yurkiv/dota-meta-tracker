@@ -1,12 +1,13 @@
 from fastapi import FastAPI
+from app.api.routes import meta, players
 from app.core.config import settings
-from app.api.routes import players
 
 app = FastAPI(title=settings.PROJECT_NAME)
 
 app.include_router(players.router)
+app.include_router(meta.router)
 
 
-@app.get("/", tags=["Health"])
+@app.get("/")
 async def root():
-    return {"status": "ok", "message": f"{settings.PROJECT_NAME} is running"}
+    return {"message": "Dota 2 Meta Tracker API is running"}
